@@ -28,6 +28,16 @@ class TimelineBridge(QObject):
         self._view = view
         self._latest_project_state: Dict[str, Any] = {}
         self._last_timeline_info: Dict[str, Any] = {}
+        self._timeline_state: Dict[str, Any] = {
+            "fps": {"num": 24, "den": 1},
+            "layers": [],
+            "clips": [],
+            "effects": [],
+            "markers": [],
+            "duration": 0,
+            "playhead_position": 0.0,
+        }
+        self._state_refresh_pending: bool = False
 
     # --- Slots callable from JavaScript ---------------------------------
     @Slot(str, str)
@@ -59,10 +69,12 @@ class TimelineBridge(QObject):
                 state = state_payload
             else:
                 state = {}
+            self._apply_project_state(state)
             self.projectStateChanged.emit(state)
             self.eventReceived.emit(method, [state])
             return state
 
+        self._handle_js_event(method, py_args)
         self.eventReceived.emit(method, py_args)
         return None
 
@@ -70,10 +82,12 @@ class TimelineBridge(QObject):
     def add_clip(self, clip: dict[str, Any]) -> None:
         """Add or update a clip on the timeline via the helper API."""
         self._run_js(f"window.timelineApi?.addClip({json.dumps(clip)})")
+        self._queue_state_refresh()
 
     def add_track(self, track: dict[str, Any]) -> None:
         """Add or update a track/layer definition on the timeline."""
         self._run_js(f"window.timelineApi?.addTrack({json.dumps(track)})")
+        self._queue_state_refresh()
 
     def remove_track(
         self,
@@ -86,16 +100,19 @@ class TimelineBridge(QObject):
         identifier_js = json.dumps(track_identifier)
         options_js = json.dumps({"keepClips": keep_clips, "allowShrink": allow_shrink})
         self._run_js(f"window.timelineApi?.removeTrack({identifier_js}, {options_js})")
+        self._queue_state_refresh()
 
     def remove_clip(self, clip_id: str) -> None:
         """Remove a clip from the timeline."""
         self._run_js(f"window.timelineApi?.removeClip({json.dumps(clip_id)})")
+        self._queue_state_refresh()
 
     def update_clip(self, clip_id: str, **patch: Any) -> None:
         """Merge updates into an existing clip."""
         self._run_js(
             f"window.timelineApi?.updateClip({json.dumps(clip_id)}, {json.dumps(patch)})"
         )
+        self._queue_state_refresh()
 
     def move_clip(
         self,
@@ -111,6 +128,7 @@ class TimelineBridge(QObject):
         self._run_js(
             f"window.timelineApi?.moveClip({json.dumps(clip_id)}, {layer_js}, {position_js}, {options_js})"
         )
+        self._queue_state_refresh()
 
     def set_playhead_playing(
         self, playing: bool, *, start_at: Optional[float] = None
@@ -148,12 +166,14 @@ class TimelineBridge(QObject):
         self._run_js(
             f"window.timelineApi?.setClipColor({json.dumps(clip_id)}, {json.dumps(color)}, {text_color_js})"
         )
+        self._queue_state_refresh()
 
     def set_project_state(self, project_state: dict[str, Any]) -> None:
         """Replace the full project state on the JS side."""
         self._run_js(
             f"window.timelineApi?.setProjectState({json.dumps(project_state)})"
         )
+        self._apply_project_state(project_state)
 
     def get_timeline_info(self) -> dict[str, Any]:
         """
@@ -168,12 +188,18 @@ class TimelineBridge(QObject):
             if self._latest_project_state and "project" not in info:
                 info["project"] = copy.deepcopy(self._latest_project_state)
             self._last_timeline_info = copy.deepcopy(info)
+            if "project" in info and isinstance(info["project"], dict):
+                self._apply_project_state(info["project"])
             return info
         if self._last_timeline_info:
             return copy.deepcopy(self._last_timeline_info)
         if self._latest_project_state:
             return {"project": copy.deepcopy(self._latest_project_state)}
         return {}
+
+    def get_cached_timeline_state(self) -> dict[str, Any]:
+        """Return the latest cached timeline state dictionary."""
+        return copy.deepcopy(self._timeline_state)
 
     def set_timeline_frame_rate(
         self,
@@ -211,6 +237,7 @@ class TimelineBridge(QObject):
 
     def request_project_state(self):
         """Ask the JS timeline to emit the current project JSON via projectStateChanged."""
+        self._state_refresh_pending = True
         self._run_js("window.timelineApi?.emitProjectState()")
 
     def move_playhead(self, seconds: float) -> None:
@@ -264,6 +291,39 @@ class TimelineBridge(QObject):
                 key: TimelineBridge._convert_variant(val) for key, val in value.items()
             }
         return value
+
+    # --- Internal state management -------------------------------------
+    def _handle_js_event(self, method: str, args: list[Any]) -> None:
+        """Trigger a state refresh for JS-driven mutations."""
+        if method in {"update_clip_data", "removeClip", "removeTrack", "addTrack"}:
+            self._queue_state_refresh()
+
+    def _queue_state_refresh(self) -> None:
+        """Debounce project state refresh requests to avoid flooding Qt."""
+        if self._state_refresh_pending:
+            return
+        self._state_refresh_pending = True
+
+        def trigger_request() -> None:
+            self.request_project_state()
+
+        QTimer.singleShot(0, trigger_request)
+
+    def _apply_project_state(self, state: dict[str, Any]) -> None:
+        """Store a deep copy of the current project state for Python access."""
+        self._latest_project_state = copy.deepcopy(state or {})
+        self._timeline_state = {
+            "fps": copy.deepcopy(self._latest_project_state.get("fps", {})),
+            "layers": copy.deepcopy(self._latest_project_state.get("layers", [])),
+            "clips": copy.deepcopy(self._latest_project_state.get("clips", [])),
+            "effects": copy.deepcopy(self._latest_project_state.get("effects", [])),
+            "markers": copy.deepcopy(self._latest_project_state.get("markers", [])),
+            "duration": self._latest_project_state.get("duration", 0),
+            "playhead_position": self._latest_project_state.get(
+                "playhead_position", 0.0
+            ),
+        }
+        self._state_refresh_pending = False
 
 
 from PySide6.QtWidgets import QWidget, QVBoxLayout
@@ -363,7 +423,8 @@ class TimelineWidget(QWidget):
         Debug hook for events coming from the HTML timeline.
         Replace with real signal/slot wiring in production.
         """
-        print(f"[Timeline Event] {method} -> {args}")
+        pass
+        # print(f"[Timeline Event] {method} -> {args}")
 
 
 def ensure_resources_initialized() -> None:

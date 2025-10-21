@@ -45,10 +45,7 @@ App.controller("TimelineCtrl", function ($scope) {
     effects: [],
     layers: [
       {id: "L0", number: 0, y: 0, label: "", lock: false},
-      {id: "L1", number: 1, y: 0, label: "", lock: false},
-      {id: "L2", number: 2, y: 0, label: "", lock: false},
-      {id: "L3", number: 3, y: 0, label: "", lock: false},
-      {id: "L4", number: 4, y: 0, label: "", lock: false}
+   
     ],
     markers: [],
     progress: {}
@@ -84,6 +81,278 @@ App.controller("TimelineCtrl", function ($scope) {
   $scope.setThumbAddress = function (url) {
     $scope.ThumbServer = url;
     timeline.qt_log("DEBUG", "setThumbAddress: " + url);
+  };
+
+  function emitStateUpdate() {
+    if (window.timelineApi && typeof window.timelineApi.emitProjectState === "function") {
+      window.timelineApi.emitProjectState();
+    }
+  }
+
+  function closeDropdownFromEvent(event) {
+    if (!event || !event.currentTarget) {
+      return;
+    }
+    var element = window.angular.element(event.currentTarget);
+    var dropdown = null;
+    if (element && typeof element.closest === "function") {
+      dropdown = element.closest("[uib-dropdown], .dropdown");
+    }
+    if ((!dropdown || dropdown.length === 0) && element) {
+      var parent = element;
+      while (parent && parent.length && !dropdown) {
+        var hasAttribute = typeof parent.attr === "function" && parent.attr("uib-dropdown") !== undefined;
+        if (hasAttribute || (typeof parent.hasClass === "function" && parent.hasClass("dropdown"))) {
+          dropdown = parent;
+          break;
+        }
+        parent = parent.parent();
+      }
+    }
+    if (!dropdown || dropdown.length === 0) {
+      return;
+    }
+    var dropdownCtrl =
+      typeof dropdown.controller === "function"
+        ? dropdown.controller("uibDropdown")
+        : null;
+    if (dropdownCtrl && typeof dropdownCtrl.toggle === "function") {
+      dropdownCtrl.toggle(false);
+      return;
+    }
+    dropdown.removeClass("open");
+    dropdown.attr("aria-expanded", "false");
+    var toggle = dropdown.find("[uib-dropdown-toggle]").first();
+    if (toggle && toggle.length) {
+      toggle.attr("aria-expanded", "false");
+    }
+  }
+
+  function normalizeLayerNumber(value) {
+    var num = Number(value);
+    if (!isFinite(num)) {
+      num = 0;
+    }
+    return num;
+  }
+
+  function generateLayerId() {
+    var existing = {};
+    ($scope.project.layers || []).forEach(function (layer) {
+      if (layer && layer.id) {
+        existing[layer.id] = true;
+      }
+    });
+    var candidate = 1;
+    while (existing["L" + candidate]) {
+      candidate += 1;
+    }
+    return "L" + candidate;
+  }
+
+  function renumberLayersAndClips() {
+    if (!Array.isArray($scope.project.layers)) {
+      $scope.project.layers = [];
+    }
+
+    var mapping = {};
+    $scope.project.layers = $scope.project.layers
+      .slice()
+      .sort(function (a, b) {
+        return normalizeLayerNumber(a.number) - normalizeLayerNumber(b.number);
+      })
+      .map(function (layer, index) {
+        var originalNumber = normalizeLayerNumber(layer.number);
+        var nextNumber = index + 1;
+        mapping[originalNumber] = nextNumber;
+        layer.number = nextNumber;
+        if (!layer.id) {
+          layer.id = generateLayerId();
+        }
+        return layer;
+      });
+
+    if (Array.isArray($scope.project.clips)) {
+      $scope.project.clips.forEach(function (clip) {
+        var clipLayer = normalizeLayerNumber(clip.layer);
+        if (Object.prototype.hasOwnProperty.call(mapping, clipLayer)) {
+          clip.layer = mapping[clipLayer];
+        }
+      });
+    }
+
+    $scope.updateLayerIndex();
+    $scope.sortItems();
+  }
+
+  $scope.addTrackAbove = function (layer, $event) {
+    if ($event) {
+      $event.preventDefault();
+      $event.stopPropagation();
+    }
+    if (!layer) {
+      closeDropdownFromEvent($event);
+      return;
+    }
+
+    var baseColor = layer.color || "#dcdfe3";
+    var targetNumber = normalizeLayerNumber(layer.number);
+    if (!Array.isArray($scope.project.layers)) {
+      $scope.project.layers = [];
+    }
+
+    $scope.project.layers.forEach(function (item) {
+      if (normalizeLayerNumber(item.number) > targetNumber) {
+        item.number = normalizeLayerNumber(item.number) + 1;
+      }
+    });
+    if (Array.isArray($scope.project.clips)) {
+      $scope.project.clips.forEach(function (clip) {
+        if (normalizeLayerNumber(clip.layer) > targetNumber) {
+          clip.layer = normalizeLayerNumber(clip.layer) + 1;
+        }
+      });
+    }
+
+    var newLayer = {
+      id: generateLayerId(),
+      number: targetNumber + 1,
+      label: "",
+      lock: false,
+      color: baseColor
+    };
+    $scope.project.layers.push(newLayer);
+    renumberLayersAndClips();
+    emitStateUpdate();
+    closeDropdownFromEvent($event);
+  };
+
+  $scope.renameTrack = function (layer, $event) {
+    if ($event) {
+      $event.preventDefault();
+      $event.stopPropagation();
+    }
+    if (!layer) {
+      closeDropdownFromEvent($event);
+      return;
+    }
+    var currentName = $scope.getTrackName(layer.label, normalizeLayerNumber(layer.number));
+    var nextName = window.prompt("重命名轨道", currentName || "");
+    if (nextName === null) {
+      closeDropdownFromEvent($event);
+      return;
+    }
+    var trimmed = nextName.trim();
+    layer.label = trimmed;
+    emitStateUpdate();
+    closeDropdownFromEvent($event);
+  };
+
+  $scope.addTrackBelow = function (layer, $event) {
+    if ($event) {
+      $event.preventDefault();
+      $event.stopPropagation();
+    }
+    if (!layer) {
+      closeDropdownFromEvent($event);
+      return;
+    }
+
+    var baseColor = layer.color || "#dcdfe3";
+    var targetNumber = normalizeLayerNumber(layer.number);
+    if (!Array.isArray($scope.project.layers)) {
+      $scope.project.layers = [];
+    }
+
+    $scope.project.layers.forEach(function (item) {
+      if (normalizeLayerNumber(item.number) >= targetNumber) {
+        item.number = normalizeLayerNumber(item.number) + 1;
+      }
+    });
+    if (Array.isArray($scope.project.clips)) {
+      $scope.project.clips.forEach(function (clip) {
+        if (normalizeLayerNumber(clip.layer) >= targetNumber) {
+          clip.layer = normalizeLayerNumber(clip.layer) + 1;
+        }
+      });
+    }
+
+    var newLayer = {
+      id: generateLayerId(),
+      number: targetNumber,
+      label: "",
+      lock: false,
+      color: baseColor
+    };
+    $scope.project.layers.push(newLayer);
+    renumberLayersAndClips();
+    emitStateUpdate();
+    closeDropdownFromEvent($event);
+  };
+
+  $scope.removeTrack = function (layer, $event) {
+    if ($event) {
+      $event.preventDefault();
+      $event.stopPropagation();
+    }
+    if (!layer || !Array.isArray($scope.project.layers)) {
+      closeDropdownFromEvent($event);
+      return;
+    }
+
+    var targetNumber = normalizeLayerNumber(layer.number);
+    var targetId = layer.id;
+    $scope.project.layers = $scope.project.layers.filter(function (item) {
+      return item.id !== targetId;
+    });
+
+    if (Array.isArray($scope.project.clips)) {
+      $scope.project.clips = $scope.project.clips.filter(function (clip) {
+        return normalizeLayerNumber(clip.layer) !== targetNumber;
+      });
+    }
+
+    renumberLayersAndClips();
+    emitStateUpdate();
+    closeDropdownFromEvent($event);
+  };
+
+  $scope.removeClipViaMenu = function (clip, $event) {
+    if ($event) {
+      $event.preventDefault();
+      $event.stopPropagation();
+    }
+    if (!clip || !Array.isArray($scope.project.clips)) {
+      closeDropdownFromEvent($event);
+      return;
+    }
+
+    var targetId = clip.id;
+    $scope.project.clips = $scope.project.clips.filter(function (item) {
+      return item.id !== targetId;
+    });
+    emitStateUpdate();
+    closeDropdownFromEvent($event);
+  };
+
+  $scope.renameClipViaMenu = function (clip, $event) {
+    if ($event) {
+      $event.preventDefault();
+      $event.stopPropagation();
+    }
+    if (!clip) {
+      closeDropdownFromEvent($event);
+      return;
+    }
+    var currentName = clip.title || "";
+    var nextName = window.prompt("重命名剪辑", currentName);
+    if (nextName === null) {
+      closeDropdownFromEvent($event);
+      return;
+    }
+    clip.title = nextName.trim();
+    emitStateUpdate();
+    closeDropdownFromEvent($event);
   };
 
   // Move the playhead to a specific time

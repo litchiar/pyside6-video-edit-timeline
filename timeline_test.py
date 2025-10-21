@@ -23,6 +23,7 @@ class TimelineDemo(QMainWindow):
 
         self.timeline = TimelineWidget(load_demo=False)
         self.setCentralWidget(self.timeline)
+        self._timeline_state: Dict[str, Any] = {}
 
         bridge = self.timeline.bridge
         bridge.pageReady.connect(self.on_page_ready)
@@ -50,11 +51,11 @@ class TimelineDemo(QMainWindow):
             {
                 "id": "clip3-demo",
                 "layer": 0,
-                "title": "演示片段",
+                "title": "演示片段1",
                 "position": 1.5,
                 "start": 0.0,
                 "duration": 15,
-                "image": "./media/images/thumbnail.png",
+                "image": "thmu.png",
                 "reader": {"has_video": False, "has_audio": False},
                 "color": "#00f375c3",
                 "text_color": "#1f1f1f",
@@ -65,11 +66,11 @@ class TimelineDemo(QMainWindow):
             {
                 "id": "clip2-demo",
                 "layer": 10,
-                "title": "演示片段",
+                "title": "演示片段2",
                 "position": 1.5,
                 "start": 0.0,
                 "duration": 13,
-                "image": "./media/images/thumbnail.png",
+                "image": r"thmu.jpg",
                 "reader": {"has_video": False, "has_audio": False},
                 "color": "#146139c3",
                 "text_color": "#b55d5d",
@@ -105,10 +106,11 @@ class TimelineDemo(QMainWindow):
 
     @Slot(dict)
     def on_project_state(self, state: Dict[str, Any]) -> None:
-        """收到完整时间轴状态快照后打印概要信息。"""
+        """Log high-level info whenever the JS timeline pushes a full state update."""
         track_count = len(state.get("layers", []))
         clip_count = len(state.get("clips", []))
-        print(f"[状态快照] 轨道: {track_count} 条，剪辑: {clip_count} 个")
+        print(f"[State Sync] tracks={track_count} clips={clip_count}")
+        self._timeline_state = self.timeline.bridge.get_cached_timeline_state()
 
     @Slot(str, str)
     def on_log_message(self, level: str, message: str) -> None:
@@ -118,12 +120,11 @@ class TimelineDemo(QMainWindow):
     def test_func_1(self) -> None:
         print("Test action 1 clicked")
         self.timeline.bridge.play_playhead()
-        print(self.timeline.bridge.get_timeline_info())
 
     def test_func_2(self) -> None:
         print("Test action 2 clicked")
         self.timeline.bridge.pause_playhead()
-        self.timeline.bridge.request_project_state()
+        print(self.timeline.bridge._timeline_state)  # 获取时间轴的状态
 
     def _init_menu_bar(self) -> None:
         """Add a simple test menu for manual actions."""

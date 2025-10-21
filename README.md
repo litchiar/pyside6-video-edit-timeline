@@ -39,31 +39,32 @@ pip install PySide6==6.7.0
 
 ### 方法一览
 
-| 方法 | 参数 | 说明 |
-| ---- | ---- | ---- |
-| `add_track(track: dict)` | `track` 含 `id`、`number`、`label`、`color` 等 | 添加或更新轨道（若 `id`/`number` 已存在则覆盖）。 |
-| `remove_track(track_identifier, *, keep_clips=False, allow_shrink=False)` | 轨道 `id` 或 `number` | 删除轨道。默认同时删除其剪辑；`keep_clips=True` 可保留剪辑；`allow_shrink=True` 时允许删除后收缩时间轴。 |
-| `add_clip(clip: dict)` | `clip` 含 `id`、`layer`、`position`、`duration`、`color` 等 | 添加或更新剪辑，缺省字段自动补齐。 |
-| `remove_clip(clip_id: str)` | 剪辑 `id` | 删除指定剪辑。 |
-| `update_clip(clip_id: str, **patch)` | 任意字段 | 局部更新剪辑（标题、时间、颜色等）。 |
-| `move_clip(clip_id: str, layer=None, position=None, **options)` | `layer` 目标轨道，`position` 目标时间；`options` 可含 `start`/`duration`/`end` | 迁移剪辑并可同步调整时长。 |
-| `set_clip_color(clip_id: str, color: str, text_color: str \| None = None)` | 背景色与文字色 | 设置剪辑颜色。 |
-| `set_project_state(state: dict)` | 完整项目 JSON | 用给定状态覆盖整个时间轴。 |
-| `get_timeline_info()` | - | 读取当前时间线的所有信息，包含 `fps`、`duration`、`tracks` 以及完整的剪辑列表。 |
-| `set_timeline_frame_rate(fps)` | 接受 `float` 帧率、`(num, den)` 元组或 `{"num": , "den": }` 字典 | 更新时间线帧率，触发前端刷新剪辑和轨道。 |
-| `request_project_state()` | – | 请求前端回传项目 JSON（触发 `projectStateChanged`）。 |
-| `resize_timeline(duration: float, *, allow_shrink: bool = True)` | 目标时长（秒） | 设置时间轴总长度；若缩短后小于最后一个剪辑，会自动对齐到最后剪辑。`allow_shrink=False` 时仅延长、不缩短。 |
-| `move_playhead(seconds: float)` | 时间（秒） | 移动播放头位置。 |
-| `set_playhead_playing(playing: bool, *, start_at: float \| None = None)` | `playing=True/False` 控制播放状态，`start_at` 可选起始时间 | 启动或停止播放头自动播放，可选地在播放前定位到指定时间。 |
-| `play_playhead(*, start_at: float \| None = None)` | 可选起始时间 | `set_playhead_playing(True, …)` 的便捷封装。 |
-| `pause_playhead()` | - | 暂停播放头动画。 |
-| `toggle_playhead()` | - | 播放/暂停切换，适合绑定热键。 |
+| 方法                                                         | 参数                                                         | 说明                                                         |
+| ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
+| `add_track(track: dict)`                                     | `track` 含 `id`、`number`、`label`、`color` 等               | 添加或更新轨道（若 `id`/`number` 已存在则覆盖）。            |
+| `remove_track(track_identifier, *, keep_clips=False, allow_shrink=False)` | 轨道 `id` 或 `number`                                        | 删除轨道。默认同时删除其剪辑；`keep_clips=True` 可保留剪辑；`allow_shrink=True` 时允许删除后收缩时间轴。 |
+| `add_clip(clip: dict)`                                       | `clip` 含 `id`、`layer`、`position`、`duration`、`color` 等  | 添加或更新剪辑，缺省字段自动补齐。                           |
+| `remove_clip(clip_id: str)`                                  | 剪辑 `id`                                                    | 删除指定剪辑。                                               |
+| `update_clip(clip_id: str, **patch)`                         | 任意字段                                                     | 局部更新剪辑（标题、时间、颜色等）。                         |
+| `move_clip(clip_id: str, layer=None, position=None, **options)` | `layer` 目标轨道，`position` 目标时间；`options` 可含 `start`/`duration`/`end` | 迁移剪辑并可同步调整时长。                                   |
+| `set_clip_color(clip_id: str, color: str, text_color: str \| None = None)` | 背景色与文字色                                               | 设置剪辑颜色。                                               |
+| `set_project_state(state: dict)`                             | 完整项目 JSON                                                | 用给定状态覆盖整个时间轴。                                   |
+| `get_timeline_info()`                                        | -                                                            | 读取当前时间线的所有信息，包含 `fps`、`duration`、`tracks` 以及完整的剪辑列表。 |
+| `set_timeline_frame_rate(fps)`                               | 接受 `float` 帧率、`(num, den)` 元组或 `{"num": , "den": }` 字典 | 更新时间线帧率，触发前端刷新剪辑和轨道。                     |
+| `request_project_state()`                                    | –                                                            | 请求前端回传项目 JSON（触发 `projectStateChanged`）。        |
+| `resize_timeline(duration: float, *, allow_shrink: bool = True)` | 目标时长（秒）                                               | 设置时间轴总长度；若缩短后小于最后一个剪辑，会自动对齐到最后剪辑。`allow_shrink=False` 时仅延长、不缩短。 |
+| `move_playhead(seconds: float)`                              | 时间（秒）                                                   | 移动播放头位置。                                             |
+| `set_playhead_playing(playing: bool, *, start_at: float \| None = None)` | `playing=True/False` 控制播放状态，`start_at` 可选起始时间   | 启动或停止播放头自动播放，可选地在播放前定位到指定时间。     |
+| `play_playhead(*, start_at: float \| None = None)`           | 可选起始时间                                                 | `set_playhead_playing(True, …)` 的便捷封装。                 |
+| `pause_playhead()`                                           | -                                                            | 暂停播放头动画。                                             |
+| `toggle_playhead()`                                          | -                                                            | 播放/暂停切换，适合绑定热键。                                |
 
 > 说明：`add_clip`、`move_clip` 等操作只会在新剪辑超出当前末尾时延长时间轴，不会自动缩短。如需缩短请调用 `resize_timeline`。
 
 ## 前端事件与数据结构
 
 大多数用户操作都会触发 `timeline.*` 方法。例如拖动剪辑结束时会执行：
+
 ```javascript
 timeline.update_clip_data(JSON.stringify(item_data), true, true, false, transactionId);
 ```
@@ -104,21 +105,10 @@ timeline.update_clip_data(JSON.stringify(item_data), true, true, false, transact
 
 `timelineApi` 会自动补齐 `duration`、`end`、`reader.fps` 等缺省字段，保证时间轴行为一致。
 
-### 获取时间线信息
-
-在业务代码中可以回调 Python 端：
-```python
-info = timeline_window.bridge.get_timeline_info()
-fps = info.get('fps')         # {'num': 48000, 'den': 1000} 表示 48fps
-duration = info.get('duration')
-tracks = info.get('tracks')   # 每个轨道同时包含 clips 列表
-```
-
-返回值同时保留原始的剪辑列表：`info["clips"]`。
-
 ### 修改时间线帧率
 
 Python 可以直接调整时间线帧率：
+
 ```python
  timeline_window.bridge.set_timeline_frame_rate(29.97)
  # 也可以传入分数形式
@@ -136,6 +126,7 @@ Python 可以直接调整时间线帧率：
 ## 示例脚本（`timeline_test.py`）
 
 运行：
+
 ```bash
 python timeline_test.py
 ```
