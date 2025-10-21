@@ -552,9 +552,22 @@ function setSelections(scope, element, id) {
  * Garauntees that the ruler is drawn when timeline first loads
  */
 function forceDrawRuler() {
-  var scroll = document.querySelector("#scrolling_tracks").scrollLeft;
-  document.querySelector("#scrolling_tracks").scrollLeft = 10;
-  document.querySelector("#scrolling_tracks").scrollLeft = scroll;
+  var tracks = document.querySelector("#scrolling_tracks");
+  var ruler = document.querySelector("#scrolling_ruler");
+  if (!tracks || !ruler) {
+    return;
+  }
+
+  window.requestAnimationFrame(function () {
+    var trackScroll = tracks.scrollLeft;
+    var rulerScroll = ruler.scrollLeft;
+
+    tracks.scrollLeft = trackScroll + 1;
+    tracks.scrollLeft = trackScroll;
+
+    ruler.scrollLeft = rulerScroll + 1;
+    ruler.scrollLeft = rulerScroll;
+  });
 }
 
 // Update the clip/transition data on Draggable stop (replaces the Track droppable)

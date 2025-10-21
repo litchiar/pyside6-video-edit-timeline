@@ -590,11 +590,32 @@
       return trackCopy;
     });
 
+    var fps = snapshot.fps || { num: 24, den: 1 };
+    var playheadSeconds = toNumber(snapshot.playhead_position, 0);
+    var fpsDen = toNumber(fps.den, 1);
+    if (fpsDen <= 0) {
+      fpsDen = 1;
+    }
+    var fpsNum = toNumber(fps.num, 24);
+    if (fpsNum <= 0) {
+      fpsNum = 24;
+    }
+    var fpsScalar = fpsNum / fpsDen;
+    var playheadFrame = fpsScalar > 0 ? Math.round(playheadSeconds * fpsScalar) + 1 : 1;
+
     return {
-      fps: snapshot.fps || { num: 24, den: 1 },
+      fps: fps,
       duration: typeof snapshot.duration === "number" ? snapshot.duration : 0,
+      playhead: {
+        seconds: playheadSeconds,
+        frame: playheadFrame
+      },
       tracks: tracks,
-      clips: window.angular.copy(clips)
+      layers: window.angular.copy(layers),
+      clips: window.angular.copy(clips),
+      effects: window.angular.copy(snapshot.effects || []),
+      markers: window.angular.copy(snapshot.markers || []),
+      project: snapshot
     };
   };
 

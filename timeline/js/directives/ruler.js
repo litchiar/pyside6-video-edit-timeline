@@ -43,6 +43,15 @@ App.directive("tlScrollableTracks", function () {
   return {
     restrict: "A",
     link: function (scope, element, attrs) {
+      // Initialize scrollLeft so the initial digest can render tick marks.
+      if (typeof scope.scrollLeft !== "number") {
+        scope.scrollLeft = element.scrollLeft();
+      }
+      scope.$evalAsync(function () {
+        if (typeof scope.scrollLeft !== "number") {
+          scope.scrollLeft = element.scrollLeft();
+        }
+      });
 
       /**
        * Handle wheel events to provide timeline zoom & horizontal scroll.

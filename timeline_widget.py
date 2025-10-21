@@ -1,5 +1,6 @@
 import json
 import sys
+import copy
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -25,6 +26,8 @@ class TimelineBridge(QObject):
     def __init__(self, view: QWebEngineView) -> None:
         super().__init__()
         self._view = view
+        self._latest_project_state: Dict[str, Any] = {}
+        self._last_timeline_info: Dict[str, Any] = {}
 
     # --- Slots callable from JavaScript ---------------------------------
     @Slot(str, str)
@@ -157,8 +160,20 @@ class TimelineBridge(QObject):
         Fetch the current state of the timeline including fps, duration, tracks and clips.
         Returns an empty dictionary if the timeline is not ready yet.
         """
-        info = self._evaluate_js("window.timelineApi?.collectTimelineInfo?.()", None)
-        return info if isinstance(info, dict) else {}
+        info_obj = self._evaluate_js(
+            "window.timelineApi?.collectTimelineInfo?.()", None
+        )
+        if isinstance(info_obj, dict):
+            info = copy.deepcopy(info_obj)
+            if self._latest_project_state and "project" not in info:
+                info["project"] = copy.deepcopy(self._latest_project_state)
+            self._last_timeline_info = copy.deepcopy(info)
+            return info
+        if self._last_timeline_info:
+            return copy.deepcopy(self._last_timeline_info)
+        if self._latest_project_state:
+            return {"project": copy.deepcopy(self._latest_project_state)}
+        return {}
 
     def set_timeline_frame_rate(
         self,
@@ -194,7 +209,7 @@ class TimelineBridge(QObject):
             f"window.timelineApi?.resizeTimeline({float(duration)}, {json.dumps(options)})"
         )
 
-    def request_project_state(self) -> None:
+    def request_project_state(self):
         """Ask the JS timeline to emit the current project JSON via projectStateChanged."""
         self._run_js("window.timelineApi?.emitProjectState()")
 
@@ -251,20 +266,24 @@ class TimelineBridge(QObject):
         return value
 
 
-class TimelineWindow(QMainWindow):
+from PySide6.QtWidgets import QWidget, QVBoxLayout
+
+
+class TimelineWidget(QWidget):
     """Main window hosting the timeline in a QWebEngineView."""
 
-    def __init__(self, *, load_demo: bool = True) -> None:
+    def __init__(
+        self, parent: Optional[QWidget] = None, *, load_demo: bool = True
+    ) -> None:
         super().__init__()
-        self.setWindowTitle("PySide6 Timeline Wrapper")
-        self.resize(1280, 720)
+
         self._load_demo = load_demo
 
         self.view = QWebEngineView(self)
-        # self.view.settings().setAttribute(
-        #     QWebEngineSettings.LocalContentCanAccessFileUrls, True
-        # )
-        self.setCentralWidget(self.view)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.view)
 
         self.channel = QWebChannel(self.view.page())
         self.bridge = TimelineBridge(self.view)
@@ -347,17 +366,10 @@ class TimelineWindow(QMainWindow):
         print(f"[Timeline Event] {method} -> {args}")
 
 
-def main() -> int:
-    """Qt application entry point."""
-    app = QApplication(sys.argv)
-    # Ensure WebEngine resources are initialized in headless contexts
+def ensure_resources_initialized() -> None:
+    """
+    Ensure WebEngine resources are initialized in headless contexts.
+    Should be invoked before instantiating TimelineWidget in CLI tools.
+    """
     if not QGuiApplication.primaryScreen():
         QGuiApplication.setQuitOnLastWindowClosed(True)
-
-    window = TimelineWindow()
-    window.show()
-    return app.exec()
-
-
-if __name__ == "__main__":
-    sys.exit(main())

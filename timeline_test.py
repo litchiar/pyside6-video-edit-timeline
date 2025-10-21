@@ -7,30 +7,36 @@ from typing import Any, Dict, List
 from PySide6.QtCore import QObject, Slot
 from PySide6.QtWidgets import QApplication
 
-from timeline_widget import TimelineWindow
+from timeline_widget import TimelineWidget, ensure_resources_initialized
+from PySide6.QtWidgets import QMainWindow
+from PySide6.QtGui import QAction
 
 
-class TimelineDemo(QObject):
+class TimelineDemo(QMainWindow):
     """演示如何与时间轴进行双向交互的简易示例。"""
 
     def __init__(self) -> None:
         super().__init__()
-        self.window = TimelineWindow(load_demo=False)
 
-        bridge = self.window.bridge
+        self.setWindowTitle("PySide6 Timeline Wrapper")
+        self.resize(1280, 720)
+
+        self.timeline = TimelineWidget(load_demo=False)
+        self.setCentralWidget(self.timeline)
+
+        bridge = self.timeline.bridge
         bridge.pageReady.connect(self.on_page_ready)
         bridge.eventReceived.connect(self.on_event_received)
         bridge.logMessage.connect(self.on_log_message)
         bridge.projectStateChanged.connect(self.on_project_state)
-
-        self.window.show()
+        self._init_menu_bar()
 
     @Slot()
     def on_page_ready(self) -> None:
         """页面准备好之后，从 Python 端注入轨道与剪辑。"""
         print("时间轴已加载，开始注入数据...")
 
-        self.window.bridge.add_track(
+        self.timeline.bridge.add_track(
             {
                 "id": "L10",
                 "number": 10,
@@ -40,9 +46,9 @@ class TimelineDemo(QObject):
             }
         )
 
-        self.window.bridge.add_clip(
+        self.timeline.bridge.add_clip(
             {
-                "id": "clip-demo",
+                "id": "clip3-demo",
                 "layer": 0,
                 "title": "演示片段",
                 "position": 1.5,
@@ -55,7 +61,7 @@ class TimelineDemo(QObject):
             }
         )
 
-        self.window.bridge.add_clip(
+        self.timeline.bridge.add_clip(
             {
                 "id": "clip2-demo",
                 "layer": 10,
@@ -70,14 +76,9 @@ class TimelineDemo(QObject):
             }
         )
 
-        self.window.bridge.resize_timeline(100)
-        self.window.bridge.move_playhead(50)
-        self.window.bridge.set_timeline_frame_rate(50)
-        self.window.bridge.get_timeline_info()
-
-        self.window.bridge.request_project_state()
-        self.window.bridge.play_playhead()
-        print("已添加轨道与片段，可以尝试在时间轴中拖动该片段。")
+        self.timeline.bridge.resize_timeline(100)
+        self.timeline.bridge.move_playhead(24)
+        self.timeline.bridge.set_timeline_frame_rate(30)
 
     @Slot(str, list)
     def on_event_received(self, method: str, args: List[Any]) -> None:
@@ -114,10 +115,36 @@ class TimelineDemo(QObject):
         """打印前端发来的日志，便于调试。"""
         print(f"[前端 {level}] {message}")
 
+    def test_func_1(self) -> None:
+        print("Test action 1 clicked")
+        self.timeline.bridge.play_playhead()
+        print(self.timeline.bridge.get_timeline_info())
+
+    def test_func_2(self) -> None:
+        print("Test action 2 clicked")
+        self.timeline.bridge.pause_playhead()
+        self.timeline.bridge.request_project_state()
+
+    def _init_menu_bar(self) -> None:
+        """Add a simple test menu for manual actions."""
+        menu_bar = self.menuBar()
+        test_menu = menu_bar.addMenu("Tests")
+
+        test_action_1 = QAction("Test Action 1", self)
+        test_action_1.triggered.connect(self.test_func_1)
+
+        test_action_2 = QAction("Test Action 2", self)
+        test_action_2.triggered.connect(self.test_func_2)
+
+        test_menu.addAction(test_action_1)
+        test_menu.addAction(test_action_2)
+
 
 def main() -> int:
     app = QApplication(sys.argv)
-    demo = TimelineDemo()
+    ensure_resources_initialized()
+    window = TimelineDemo()
+    window.show()
     return app.exec()
 
 
